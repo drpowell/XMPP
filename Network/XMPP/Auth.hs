@@ -3,7 +3,6 @@ module Network.XMPP.Auth where
 import Network.XMPP.XMLParse
 import Network.XMPP.XMPPMonad
 import Network.XMPP.Stanzas
-import Network.XMPP.MyDebug
 
 -- |Non-SASL authentication, following XEP-0078.
 startAuth :: String             -- ^Username (part before \@ in JID)

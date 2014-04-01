@@ -2,7 +2,7 @@ module Network.XMPP.Roster (
     RosterItem(..),
     Subscription(..),
     getRoster,
-    Presence(..),
+    --Presence(..),
     Status(..),
     StatusType(..),
     doPresence,
@@ -61,9 +61,11 @@ data Presence = Available Status
               | Unsubscribed
               | Probe
               | Error
+                deriving (Show,Eq)
 
 -- | TODO: xml:lang for multiple statuses.
 data Status = Status StatusType [String]
+                deriving (Show,Eq)
 
 data StatusType = StatusOnline
                 | StatusAway
@@ -71,6 +73,7 @@ data StatusType = StatusOnline
                 | StatusDND
                 | StatusXA
                 | StatusOffline
+                deriving (Show,Eq)
 
 
 -- | Read presence stanza.

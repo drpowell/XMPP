@@ -1,6 +1,7 @@
 module Network.XMPP.Stanzas
                ( sendIq
                , sendIqWait
+               , sendIqResponse
                , hasBody
                , getMessageBody
                , sendMessage
@@ -130,6 +131,7 @@ conj a b = \x -> a x && b x
 -- |Return true if the tag has the given name.
 hasNodeName :: String -> StanzaPredicate
 hasNodeName name (XML name' _ _) = name == name'
+hasNodeName _ _ = error "Unexpected use of hasNodeName"
 
 -- The three basic stanza types
 
@@ -156,6 +158,7 @@ attributeMatches :: String      -- ^Attribute name
                  -> StanzaPredicate
 attributeMatches attr p (XML _ attrs _) =
     maybe False p (lookup attr attrs)
+attributeMatches _ _ _ = error "Unexpected use of attributeMatches"
 
 -- |Return true if the stanza is from the given JID.
 isFrom :: String -> StanzaPredicate
@@ -227,7 +230,7 @@ getMessageStamp stanza =
         xs' = filter (attributeMatches "xmlns" (=="jabber:x:delay")) xs
         stamps = map (getAttr "stamp") xs'
     in case stamps of
-         [stamp@(Just s)] -> stamp
+         [stamp@(Just _s)] -> stamp
          _ -> Nothing
 
 -- |Get the jid and the resource of stanza.

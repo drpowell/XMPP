@@ -5,5 +5,6 @@ This started with the source imported from
 
 Forked to add some new features:
 
+  * Easier to install (more recent packages)
   * Logging (hslogger)
   * Locking on reading/writing
