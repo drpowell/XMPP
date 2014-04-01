@@ -21,8 +21,9 @@ Library
   Other-modules:     Network.XMPP.Auth, Network.XMPP.JID,
                      Network.XMPP.Stanzas, Network.XMPP.TCPConnection,
                      Network.XMPP.XMLParse, Network.XMPP.XMPPConnection,
-                     Network.XMPP.XMPPMonad, Network.XMPP.MyDebug,
+                     Network.XMPP.XMPPMonad,
                      Network.XMPP.Roster
 
-  Build-depends:     base >= 4.0 && < 5, haskell98, random, utf8-string,
-                     network, parsec >= 2.0 && < 3, mtl, hsdns >= 1.4.1
+  Build-depends:     base >= 4.0 && < 5, random, utf8-string,
+                     network, parsec >= 3.1, mtl, hsdns >= 1.6.1,
+                     SHA, bytestring

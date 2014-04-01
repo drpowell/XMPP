@@ -31,7 +31,7 @@ import Network.XMPP.XMPPMonad
 import Network.XMPP.XMLParse
 import Network.XMPP.JID
 import System.Random
-import Maybe
+import Data.Maybe
 
 --- Sending info requests and responses
 

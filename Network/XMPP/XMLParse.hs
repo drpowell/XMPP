@@ -21,7 +21,7 @@ module Network.XMPP.XMLParse
     where
 
 import Text.ParserCombinators.Parsec
-import List
+import Data.List
 
 -- |A data structure representing an XML element.
 data XMLElem = XML String [(String,String)] [XMLElem]

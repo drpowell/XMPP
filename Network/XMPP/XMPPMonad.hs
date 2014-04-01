@@ -1,5 +1,4 @@
-{-# OPTIONS_GHC -fglasgow-exts #-}
--- this could be {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE RankNTypes #-}
 module Network.XMPP.XMPPMonad
                  ( XMPP
                  , runXMPP
