@@ -1,4 +1,5 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE PackageImports,RankNTypes #-}
+-- this could be {-# LANGUAGE FlexibleInstances #-}
 module Network.XMPP.XMPPMonad
                  ( XMPP
                  , runXMPP
@@ -9,15 +10,19 @@ module Network.XMPP.XMPPMonad
                  , StanzaPredicate
                  , StanzaHandler
                  , Control.Monad.State.liftIO
+                 , tagXMPPMonad
                  )
     where
 
-import Control.Monad.State
+import "mtl" Control.Monad.State
 
 import Network.XMPP.XMLParse
 import Network.XMPP.XMPPConnection hiding ( sendStanza )
 import qualified Network.XMPP.XMPPConnection as XMPPConnection
-import Network.XMPP.MyDebug
+import System.Log.Logger (debugM)
+
+tagXMPPMonad :: String
+tagXMPPMonad = "XMPP.Monad"
 
 -- |A stanza predicate.
 type StanzaPredicate = (XMLElem -> Bool)
@@ -49,7 +54,7 @@ instance Monad XMPP where
                       XMPPJust a ->
                           xmppFn (g a) c state'
                       WaitingFor pred mangler keep ->
-                          return $ (state', 
+                          return $ (state',
                                     WaitingFor pred
                                     (\stanza -> (mangler stanza) >>= g) keep)
     return a = XMPP $ \_ state -> return (state, XMPPJust a)
@@ -63,7 +68,7 @@ modifyState :: (XMPPState -> XMPPState) -> XMPP ()
 modifyState fn = XMPP $ \_ state -> return (fn state, XMPPJust ())
 
 instance MonadIO XMPP where
-    liftIO iofn = XMPP $ \c state -> do
+    liftIO iofn = XMPP $ \_c state -> do
                         iores <- iofn
                         return (state, XMPPJust iores)
 
@@ -76,7 +81,7 @@ initialState = []
 runXMPP :: XMPPConnection c => c -> XMPP () -> IO ()
 runXMPP c x = runXMPP' initialState c [x] []
     where runXMPP' :: XMPPConnection c => XMPPState -> c -> [XMPP ()] -> [XMLElem] -> IO ()
-          runXMPP' [] c [] _ =
+          runXMPP' [] _c [] _ =
               -- if there are no functions and no handlers, there is
               -- nothing left to do.
               return ()
@@ -99,9 +104,9 @@ runXMPP c x = runXMPP' initialState c [x] []
               -- if there are no more functions to run, but there are
               -- handlers left, wait for incoming stanzas
               do
-                myDebug $ show (length s) ++ " handlers left"
+                debugM tagXMPPMonad $ show (length s) ++ " handlers left"
                 newStanzas <- getStanzas c
-                myDebug $ show (length newStanzas) ++ " new stanzas"
+                debugM tagXMPPMonad $ show (length newStanzas) ++ " new stanzas"
                 runXMPP' s c [] newStanzas
 
 -- |Send an XMPP stanza.
@@ -128,7 +133,7 @@ addHandler pred handler keep =
 -- matching the predicate.
 waitForStanza :: StanzaPredicate -> XMPP XMLElem
 waitForStanza pred =
-    XMPP $ \c state -> return (state, WaitingFor pred return False)
+    XMPP $ \_c state -> return (state, WaitingFor pred return False)
 
 -- |Terminate the loop as soon as the current function exits.  This
 -- works by removing all stanza handlers, which makes 'runXMPP' exit.
@@ -140,12 +145,12 @@ actOnStanza :: XMLElem -> XMPP ()
 actOnStanza stanza =
     do
       table <- getState
-      liftIO $ myDebug $ "checking " ++ show (length table) ++ " active handlers"
+      liftIO $ debugM tagXMPPMonad $ "checking " ++ show (length table) ++ " active handlers"
       case findHandler table stanza of
         Just (table', handler) ->
             do
               putState table'
-              liftIO $ myDebug $ show (length table') ++ " handlers left"
+              liftIO $ debugM tagXMPPMonad $ show (length table') ++ " handlers left"
               handler stanza
         Nothing ->
             return ()
@@ -168,4 +173,3 @@ findHandler ((pred, handler, keep):table) stanza =
             (table', handler') <- findHandler table stanza
             return ((pred, handler, keep):table', handler')
 findHandler [] _ = Nothing
-

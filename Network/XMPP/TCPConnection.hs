@@ -2,12 +2,13 @@ module Network.XMPP.TCPConnection
                      ( TCPConnection
                      , openStream
                      , getStreamStart
+                     , tagXMPPConn
                      )
     where
 
 import Network.XMPP.XMLParse
 import Network.XMPP.XMPPConnection
-import Network.XMPP.MyDebug
+import System.Log.Logger
 
 import Network
 import System.IO
@@ -16,6 +17,8 @@ import Control.Monad
 import Codec.Binary.UTF8.String
 import ADNS
 
+tagXMPPConn :: String
+tagXMPPConn = "XMPP.Conn"
 
 -- |An XMPP connection over TCP.
 data TCPConnection = TCPConnection Handle (IORef String)
@@ -66,7 +69,7 @@ instance XMPPConnection TCPConnection where
     sendStanza (TCPConnection h _) x =
         let str = xmlToString True x in
         do
-          myDebug $ "sent '" ++ str ++ "'"
+          debugM tagXMPPConn $ "sent '" ++ str ++ "'"
           hPutStr h (encodeString str)
     closeConnection (TCPConnection h _) =
         hClose h
@@ -76,7 +79,7 @@ parseBuffered c@(TCPConnection h bufvar) parser = do
   buffer <- readIORef bufvar
   input' <- getString h
   let input = decodeString input'
-  myDebug $ "got '" ++ buffer ++ input ++ "'"
+  debugM tagXMPPConn $ "got '" ++ buffer ++ input ++ "'"
   case parse (getRest parser) "" (buffer++input) of
     Right (result, rest) ->
         do
@@ -84,7 +87,7 @@ parseBuffered c@(TCPConnection h bufvar) parser = do
           return result
     Left e ->
         do
-          myDebug $ "An error?  Hopefully doesn't matter.\n"++(show e)
+          warningM tagXMPPConn $ "An error?  Hopefully doesn't matter."++(show e)
           parseBuffered c parser
 
 getString :: Handle -> IO String
