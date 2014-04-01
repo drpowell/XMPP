@@ -11,6 +11,7 @@ import Network.XMPP.XMPPConnection
 import System.Log.Logger
 
 import Network
+import Control.Concurrent.MVar
 import System.IO
 import Data.IORef
 import Control.Monad
@@ -21,39 +22,55 @@ tagXMPPConn :: String
 tagXMPPConn = "XMPP.Conn"
 
 -- |An XMPP connection over TCP.
-data TCPConnection = TCPConnection Handle (IORef String)
+data TCPConnection = TCPConnection { handle :: Handle
+                                   , buffer :: IORef String
+                                   , readLock :: MVar ()
+                                   , writeLock :: MVar ()
+                                   --, debugFile :: Maybe Handle
+                                   }
 
 -- |Open a TCP connection to the named server, port 5222 (or others
 -- found in SRV), and send a stream header.
-openStream :: String -> IO TCPConnection
-openStream server =
+openStream :: String -> String -> IO TCPConnection
+openStream server serverName =
     do
       -- here we do service lookup (via SRV or A)
-      svcs <- getSvcServer server
+      svcs <- getSvcServer server 5222
 
       h <- connectStream svcs
-      hPutStr h $ xmlToString False $
+      let s = xmlToString False $
               XML "stream:stream"
-                      [("to",server),
+                      [("to",serverName),
                        ("xmlns","jabber:client"),
                        ("xmlns:stream","http://etherx.jabber.org/streams")]
                       []
+      debugM tagXMPPConn $ "Sending : "++s
+      hPutStr h s
       buffer <- newIORef ""
-      return $ TCPConnection h buffer
+      readLock <- newMVar ()
+      writeLock <- newMVar ()
+      --debugFile <- openFile ("xx-"++show h) WriteMode
+      return $ TCPConnection h buffer readLock writeLock -- (Just debugFile)
 
-getSvcServer :: String -> IO [(String, PortID)]
-getSvcServer domain =
+getSvcServer :: String -> Int -> IO [(String, PortID)]
+getSvcServer domain port = return [(domain,PortNumber $ toEnum port)]
+{-
     initResolver [] $ \resolver -> do
         a <- querySRV resolver ("_xmpp-client._tcp." ++ domain)
-        return $ (maybe [] id a) ++ [(domain, PortNumber $ toEnum 5222)]
+        return $ (maybe [] id a) ++ [(domain, PortNumber $ toEnum port)]
+-}
+
 
 connectStream :: [(String, PortID)] -> IO Handle
 connectStream [] = error "can't connect: no suitable servers found"
 connectStream (x:xs) =
-    catch (connectStream' x) (\e -> connectStream xs)
+    Control.Exception.catch
+               (connectStream' x)
+               (\e -> putStrLn ("e="++show (e :: IOError)) >> connectStream xs)
 
 connectStream' :: (String, PortID) -> IO Handle
 connectStream' (host, port) = do
+    debugM tagXMPPConn $ "Trying connectTo : "++host -- ++" : "++show port
     s <- connectTo host port
     hSetBuffering s NoBuffering
     return s
@@ -64,26 +81,29 @@ getStreamStart :: TCPConnection -> IO XMLElem
 getStreamStart c =
     parseBuffered c xmppStreamStart
 
+withLock :: MVar () -> IO a -> IO a
+withLock mvar a = withMVar mvar $ \_ -> a
+
 instance XMPPConnection TCPConnection where
-    getStanzas c = parseBuffered c deepTags
-    sendStanza (TCPConnection h _) x =
-        let str = xmlToString True x in
-        do
-          debugM tagXMPPConn $ "sent '" ++ str ++ "'"
-          hPutStr h (encodeString str)
-    closeConnection (TCPConnection h _) =
-        hClose h
+    getStanzas c = withLock (readLock c) $ parseBuffered c deepTags
+    sendStanza c x =
+        let str = xmlToString True x
+        in withLock (writeLock c) $ do
+               debugM tagXMPPConn $ "sent '" ++ str ++ "'"
+               hPutStr (handle c) (encodeString str)
+    closeConnection c =
+        hClose (handle c)
 
 parseBuffered :: TCPConnection -> Parser a -> IO a
-parseBuffered c@(TCPConnection h bufvar) parser = do
-  buffer <- readIORef bufvar
-  input' <- getString h
+parseBuffered c parser = do
+  buf <- readIORef (buffer c)
+  input' <- getString (handle c)
   let input = decodeString input'
-  debugM tagXMPPConn $ "got '" ++ buffer ++ input ++ "'"
-  case parse (getRest parser) "" (buffer++input) of
+  debugM tagXMPPConn $ "got '" ++ buf ++ input ++ "'"
+  case parse (getRest parser) "" (buf++input) of
     Right (result, rest) ->
         do
-          writeIORef bufvar rest
+          writeIORef (buffer c) rest
           return result
     Left e ->
         do
@@ -93,7 +113,9 @@ parseBuffered c@(TCPConnection h bufvar) parser = do
 getString :: Handle -> IO String
 getString h =
     do
-      hWaitForInput h (-1)
+      eof <- hIsEOF h
+      when (not eof) $
+         hWaitForInput h (-1) >> return ()
       getEverything
     where getEverything =
               do
@@ -101,3 +123,9 @@ getString h =
                 if r
                   then liftM2 (:) (hGetChar h) getEverything
                   else return []
+
+{-
+debugLog debugH m = case debugH of
+                      Nothing -> return ()
+                      Just debugH -> hPutStr debugH m >> hFlush debugH
+-}
