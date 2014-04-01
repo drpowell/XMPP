@@ -43,10 +43,12 @@ xmlPath (name:names) (XML _ _ els) =
                         (XML n _ _) -> name==n
                         _ -> False) els
       xmlPath names el
+xmlPath _ _ = error "Unexpected use of xmlPath"
 
 -- |Get the value of an attribute in the given tag.
 getAttr :: String -> XMLElem -> Maybe String
 getAttr attr (XML _ attrs _) = lookup attr attrs
+getAttr _ _ = error "Unexpected use of getAttr"
 
 -- |Get the character data subelement of the given tag.
 getCdata :: XMLElem -> Maybe String
@@ -54,6 +56,7 @@ getCdata (XML _ _ els) =
     case els of
       [CData s] -> Just s
       _ -> Nothing
+getCdata _ = error "Unexpected use of getCdata"
 
 -- |Convert the tag back to XML.  If the first parameter is true,
 -- close the tag.
@@ -113,7 +116,7 @@ deepTag :: Parser XMLElem
 deepTag =
     do
       (XML name attrs _) <- tagStart
-      subels <- 
+      subels <-
           (try $ do
              char '/'
              char '>'
@@ -180,10 +183,11 @@ cdata =
                        "gt" -> '>'
                        "quot" -> '"'
                        "apos" -> '\''
+                       x -> error $ "Unknown entity in cdata : "++show x
 -----------------------------------------------
 
 tokenChar :: Parser Char
-tokenChar = letter <|> char ':' <|> char '-'
+tokenChar = letter <|> char ':' <|> char '-' <|> char '_' <|> char '.'
 
 processingInstruction :: Parser ()
 processingInstruction =
@@ -207,9 +211,11 @@ xmlPath' (name:names) elems =
                        (XML n _ _) -> name==n
                        _ -> False
                    ) els
+        filter_elem _ = error "Unexpected use of filter_elem"
     in xmlPath' names (concat elems')
 
 -----------------------------------------------
 -- |Get all childs of the XML element
 allChilds :: XMLElem -> [XMLElem]
 allChilds (XML _ _ c) = c
+allChilds _ = error "Unexpected use of allChilds"
