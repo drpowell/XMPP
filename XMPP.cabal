@@ -18,6 +18,8 @@ Data-Files:          report.txt
 Library
   Exposed-Modules:   Network.XMPP, Network.XMPP.MUC
 
+  ghc-options:       -Wall -fno-warn-missing-signatures -fwarn-incomplete-patterns -fno-warn-name-shadowing -fno-warn-unused-do-bind
+
   Other-modules:     Network.XMPP.Auth, Network.XMPP.JID,
                      Network.XMPP.Stanzas, Network.XMPP.TCPConnection,
                      Network.XMPP.XMLParse, Network.XMPP.XMPPConnection,
