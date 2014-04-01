@@ -2,6 +2,7 @@ module Network.XMPP.TCPConnection
                      ( TCPConnection
                      , openStream
                      , getStreamStart
+                     , openComponent
                      , tagXMPPConn
                      )
     where
@@ -17,6 +18,9 @@ import Data.IORef
 import Control.Monad
 import Codec.Binary.UTF8.String
 import ADNS
+import qualified Data.ByteString.Lazy as L
+import Data.Digest.Pure.SHA
+import Control.Exception (catch)
 
 tagXMPPConn :: String
 tagXMPPConn = "XMPP.Conn"
@@ -51,6 +55,40 @@ openStream server serverName =
       writeLock <- newMVar ()
       --debugFile <- openFile ("xx-"++show h) WriteMode
       return $ TCPConnection h buffer readLock writeLock -- (Just debugFile)
+
+openComponent :: String -> Int -> String -> String -> IO TCPConnection
+openComponent server port compName secret =
+    do
+      svcs <- getSvcServer server port
+      h <- connectStream svcs
+      let s = xmlToString False $
+              XML "stream:stream"
+                      [("to", compName),
+                       ("xmlns","jabber:component:accept"),
+                       ("xmlns:stream","http://etherx.jabber.org/streams")]
+                      []
+      debugM tagXMPPConn $ "Sending : "++s
+      hPutStr h s
+      buffer <- newIORef ""
+      readLock <- newMVar ()
+      writeLock <- newMVar ()
+      let c = TCPConnection h buffer readLock writeLock -- Nothing
+      e <- getStreamStart c
+      debugM tagXMPPConn $ "Got : "++show e
+      let from = maybe "" id (getAttr "from" e)
+      let idStr = maybe "" id (getAttr "id" e)
+      if from==compName && not (null idStr)
+         then doHandshake c idStr secret
+         else error "from mismatch"
+      return c
+
+  where
+    doHandshake c idStr secret = do
+      let digest = showDigest . sha1 . L.pack . encode $ idStr++secret
+      debugM tagXMPPConn $ "digest="++digest
+      sendStanza c $ XML "handshake" [] [CData digest]
+      s <- getStanzas c
+      debugM tagXMPPConn $ "got handshake response : "++show s
 
 getSvcServer :: String -> Int -> IO [(String, PortID)]
 getSvcServer domain port = return [(domain,PortNumber $ toEnum port)]
