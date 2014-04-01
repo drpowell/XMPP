@@ -17,7 +17,6 @@ import System.IO
 import Data.IORef
 import Control.Monad
 import Codec.Binary.UTF8.String
-import ADNS
 import qualified Data.ByteString.Lazy as L
 import Data.Digest.Pure.SHA
 import Control.Exception (catch)
@@ -92,12 +91,6 @@ openComponent server port compName secret =
 
 getSvcServer :: String -> Int -> IO [(String, PortID)]
 getSvcServer domain port = return [(domain,PortNumber $ toEnum port)]
-{-
-    initResolver [] $ \resolver -> do
-        a <- querySRV resolver ("_xmpp-client._tcp." ++ domain)
-        return $ (maybe [] id a) ++ [(domain, PortNumber $ toEnum port)]
--}
-
 
 connectStream :: [(String, PortID)] -> IO Handle
 connectStream [] = error "can't connect: no suitable servers found"
