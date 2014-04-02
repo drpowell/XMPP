@@ -15,19 +15,19 @@ import Network
 import Control.Concurrent.MVar
 import System.IO
 import Data.IORef
-import Control.Monad
-import Codec.Binary.UTF8.String
-import qualified Data.ByteString.Lazy as L
-import Data.Digest.Pure.SHA
+import Data.Char (ord)
+import qualified Data.ByteString.Lazy as BL
+import Data.Digest.Pure.SHA (sha1, showDigest)
 import Control.Exception (catch)
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 
 tagXMPPConn :: String
 tagXMPPConn = "XMPP.Conn"
 
 -- |An XMPP connection over TCP.
 data TCPConnection = TCPConnection { handle :: Handle
-                                   , buffer :: IORef String
+                                   , buffer :: IORef T.Text
                                    , readLock :: MVar ()
                                    , writeLock :: MVar ()
                                    --, debugFile :: Maybe Handle
@@ -50,7 +50,7 @@ openStream server serverName =
                       []
       debugM tagXMPPConn $ "Sending : "++s
       hPutStr h s
-      buffer <- newIORef ""
+      buffer <- newIORef T.empty
       readLock <- newMVar ()
       writeLock <- newMVar ()
       --debugFile <- openFile ("xx-"++show h) WriteMode
@@ -69,7 +69,7 @@ openComponent server port compName secret =
                       []
       debugM tagXMPPConn $ "Sending : "++s
       hPutStr h s
-      buffer <- newIORef ""
+      buffer <- newIORef T.empty
       readLock <- newMVar ()
       writeLock <- newMVar ()
       let c = TCPConnection h buffer readLock writeLock -- Nothing
@@ -84,7 +84,7 @@ openComponent server port compName secret =
 
   where
     doHandshake c idStr secret = do
-      let digest = showDigest . sha1 . L.pack . encode $ idStr++secret
+      let digest = showDigest . sha1 . BL.pack . map (fromIntegral . ord) $ idStr++secret
       debugM tagXMPPConn $ "digest="++digest
       sendStanza c $ XML "handshake" [] [CData digest]
       s <- getStanzas c
@@ -122,18 +122,17 @@ instance XMPPConnection TCPConnection where
         let str = xmlToString True x
         in withLock (writeLock c) $ do
                debugM tagXMPPConn $ "sent '" ++ str ++ "'"
-               hPutStr (handle c) (encodeString str)
+               T.hPutStr (handle c) (T.pack str)
     closeConnection c =
         hClose (handle c)
 
 parseBuffered :: (Show a) => TCPConnection -> Parser a -> IO a
 parseBuffered c parser = do
     buf <- readIORef (buffer c)
-    go (parse parser) (T.pack buf)
+    go (parse parser) buf
 
   where
-    readMore = do input' <- getString (handle c)
-                  return $ T.pack $ decodeString input'
+    readMore = getString (handle c)
 
     -- go :: (T.Text -> IResult T.Text a) -> T.Text -> IO a
     go p buf1 = do
@@ -143,27 +142,16 @@ parseBuffered c parser = do
         debugM tagXMPPConn $ "got '" ++ T.unpack buf ++ "'"
         case p buf of
             Fail rest _ctxt msg -> do warningM tagXMPPConn $ "An error?  Hopefully doesn't matter : "++msg
-                                      writeIORef (buffer c) (T.unpack rest)
+                                      writeIORef (buffer c) rest
                                       parseBuffered c parser
 
-            Done rest result -> do writeIORef (buffer c) (T.unpack rest)
+            Done rest result -> do writeIORef (buffer c) rest
                                    return result
 
             Partial cont -> go cont =<< readMore
 
-getString :: Handle -> IO String
-getString h =
-    do
-      eof <- hIsEOF h
-      when (not eof) $
-         hWaitForInput h (-1) >> return ()
-      getEverything
-    where getEverything =
-              do
-                r <- hReady h
-                if r
-                  then liftM2 (:) (hGetChar h) getEverything
-                  else return []
+getString :: Handle -> IO T.Text
+getString h = T.hGetChunk h
 
 {-
 debugLog debugH m = case debugH of
