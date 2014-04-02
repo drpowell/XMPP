@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 -- |The difference between this XML parsers and all other XML parsers
 -- is that this one can parse an XML document that is only partially
 -- received, returning the parts that have arrived so far.
@@ -8,19 +10,22 @@ module Network.XMPP.XMLParse
     , getCdata
     , xmlToString
     , attrsToString
-    , getRest
     , xmppStreamStart
     , shallowTag
     , deepTag
     , deepTags
-    , Text.ParserCombinators.Parsec.parse
-    , Text.ParserCombinators.Parsec.Parser
+    , Data.Attoparsec.Text.parse
+    , Data.Attoparsec.Text.Parser
+    , Data.Attoparsec.Text.IResult(..)
     , xmlPath'
     , allChilds
     )
     where
 
-import Text.ParserCombinators.Parsec
+import qualified Data.Text as T
+import Data.Attoparsec.Text
+import Data.Attoparsec.Combinator
+import Control.Applicative ((<|>))
 import Data.List
 
 -- |A data structure representing an XML element.
@@ -90,10 +95,7 @@ attrsToString [] = ""
 attrsToString ((name,value):attrs) =
     " "++name++"='"++value++"'" ++ attrsToString attrs
 
-getRest :: Parser a -> Parser (a, String)
-getRest f = do x <- try f
-               p <- getInput
-               return (x, p)
+many = many'
 
 xmppStreamStart :: Parser XMLElem
 xmppStreamStart =
@@ -127,7 +129,7 @@ deepTag =
             els <- many $ (try deepTag) <|> cdata
             char '<'
             char '/'
-            string name
+            string $ T.pack name
             char '>'
             return els
       return $ XML name attrs subels

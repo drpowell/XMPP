@@ -26,6 +26,6 @@ Library
                      Network.XMPP.XMPPMonad,
                      Network.XMPP.Roster
 
-  Build-depends:     base >= 4.0 && < 5, random, utf8-string,
-                     network, parsec >= 3.1, mtl,
+  Build-depends:     base >= 4.0 && < 5, random, utf8-string, text,
+                     network, attoparsec >= 0.11, mtl,
                      SHA, bytestring, hslogger

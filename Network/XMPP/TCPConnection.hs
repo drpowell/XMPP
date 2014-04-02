@@ -20,6 +20,7 @@ import Codec.Binary.UTF8.String
 import qualified Data.ByteString.Lazy as L
 import Data.Digest.Pure.SHA
 import Control.Exception (catch)
+import qualified Data.Text as T
 
 tagXMPPConn :: String
 tagXMPPConn = "XMPP.Conn"
@@ -116,7 +117,7 @@ withLock :: MVar () -> IO a -> IO a
 withLock mvar a = withMVar mvar $ \_ -> a
 
 instance XMPPConnection TCPConnection where
-    getStanzas c = withLock (readLock c) $ parseBuffered c deepTags
+    getStanzas c = withLock (readLock c) $ do x <- parseBuffered c deepTag ; return [x]  -- FIXME
     sendStanza c x =
         let str = xmlToString True x
         in withLock (writeLock c) $ do
@@ -125,21 +126,30 @@ instance XMPPConnection TCPConnection where
     closeConnection c =
         hClose (handle c)
 
-parseBuffered :: TCPConnection -> Parser a -> IO a
+parseBuffered :: (Show a) => TCPConnection -> Parser a -> IO a
 parseBuffered c parser = do
-  buf <- readIORef (buffer c)
-  input' <- getString (handle c)
-  let input = decodeString input'
-  debugM tagXMPPConn $ "got '" ++ buf ++ input ++ "'"
-  case parse (getRest parser) "" (buf++input) of
-    Right (result, rest) ->
-        do
-          writeIORef (buffer c) rest
-          return result
-    Left e ->
-        do
-          warningM tagXMPPConn $ "An error?  Hopefully doesn't matter."++(show e)
-          parseBuffered c parser
+    buf <- readIORef (buffer c)
+    go (parse parser) (T.pack buf)
+
+  where
+    readMore = do input' <- getString (handle c)
+                  return $ T.pack $ decodeString input'
+
+    -- go :: (T.Text -> IResult T.Text a) -> T.Text -> IO a
+    go p buf1 = do
+        buf <- if T.null buf1
+                  then readMore
+                  else return buf1
+        debugM tagXMPPConn $ "got '" ++ T.unpack buf ++ "'"
+        case p buf of
+            Fail rest _ctxt msg -> do warningM tagXMPPConn $ "An error?  Hopefully doesn't matter : "++msg
+                                      writeIORef (buffer c) (T.unpack rest)
+                                      parseBuffered c parser
+
+            Done rest result -> do writeIORef (buffer c) (T.unpack rest)
+                                   return result
+
+            Partial cont -> go cont =<< readMore
 
 getString :: Handle -> IO String
 getString h =
