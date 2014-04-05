@@ -1,14 +1,16 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Network.XMPP.Auth where
 
 import Network.XMPP.XMLParse
 import Network.XMPP.XMPPMonad
 import Network.XMPP.Stanzas
+import Data.Text (Text)
 
 -- |Non-SASL authentication, following XEP-0078.
-startAuth :: String             -- ^Username (part before \@ in JID)
-          -> String             -- ^Server (part after \@ in JID)
-          -> String             -- ^Password
-          -> String             -- ^Resource (unique identifier for this connection)
+startAuth :: Text             -- ^Username (part before \@ in JID)
+          -> Text             -- ^Server (part after \@ in JID)
+          -> Text             -- ^Password
+          -> Text             -- ^Resource (unique identifier for this connection)
           -> XMPP Integer       -- ^Error number. Zero if authentication succeeded.
 startAuth username server password resource = do
   response <- sendIqWait server "get" [XML "query"

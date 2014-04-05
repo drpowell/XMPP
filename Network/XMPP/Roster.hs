@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Network.XMPP.Roster (
     RosterItem(..),
     Subscription(..),
@@ -12,16 +13,17 @@ module Network.XMPP.Roster (
 import Network.XMPP.XMPPMonad
 import Network.XMPP.XMLParse
 import Network.XMPP.Stanzas
+import Data.Text (Text)
 
 -- TODO: add/delete roster items (via sending IQs)
 --       add/delete subscriptions
 
 
 data RosterItem = RosterItem
-    { itemName :: String
-    , itemJid :: String
+    { itemName :: Text
+    , itemJid :: Text
     , itemSubscription :: Subscription
-    , itemGroups :: [String]
+    , itemGroups :: [Text]
     } deriving Show
 
 -- "There are nine possible subscription states"
@@ -64,7 +66,7 @@ data Presence = Available Status
                 deriving (Show,Eq)
 
 -- | TODO: xml:lang for multiple statuses.
-data Status = Status StatusType [String]
+data Status = Status StatusType [Text]
                 deriving (Show,Eq)
 
 data StatusType = StatusOnline

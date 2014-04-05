@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Network.XMPP.TCPConnection
                      ( TCPConnection
                      , openStream
@@ -44,7 +46,7 @@ openStream server serverName =
       h <- connectStream svcs
       let s = xmlToString False $
               XML "stream:stream"
-                      [("to",serverName),
+                      [("to",T.pack serverName),
                        ("xmlns","jabber:client"),
                        ("xmlns:stream","http://etherx.jabber.org/streams")]
                       []
@@ -63,7 +65,7 @@ openComponent server port compName secret =
       h <- connectStream svcs
       let s = xmlToString False $
               XML "stream:stream"
-                      [("to", compName),
+                      [("to", T.pack compName),
                        ("xmlns","jabber:component:accept"),
                        ("xmlns:stream","http://etherx.jabber.org/streams")]
                       []
@@ -77,16 +79,16 @@ openComponent server port compName secret =
       debugM tagXMPPConn $ "Got : "++show e
       let from = maybe "" id (getAttr "from" e)
       let idStr = maybe "" id (getAttr "id" e)
-      if from==compName && not (null idStr)
+      if from==T.pack compName && not (T.null idStr)
          then doHandshake c idStr secret
          else error "from mismatch"
       return c
 
   where
     doHandshake c idStr secret = do
-      let digest = showDigest . sha1 . BL.pack . map (fromIntegral . ord) $ idStr++secret
+      let digest = showDigest . sha1 . BL.pack . map (fromIntegral . ord) $ T.unpack idStr++secret
       debugM tagXMPPConn $ "digest="++digest
-      sendStanza c $ XML "handshake" [] [CData digest]
+      sendStanza c $ XML "handshake" [] [CData $ T.pack digest]
       s <- getStanzas c
       debugM tagXMPPConn $ "got handshake response : "++show s
 

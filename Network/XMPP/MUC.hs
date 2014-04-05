@@ -1,29 +1,32 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- |Implementation of Multi-User Chat, according to XEP-0045.  This
 -- API needs more thought and will change.
 module Network.XMPP.MUC where
 
 import Network.XMPP
+import Data.Text (Text)
+import qualified Data.Text as T
 
 -- |Return true if the stanza is from a JID whose \"username\@server\"
 -- part matches the given string.
-matchesBare :: String -> StanzaPredicate
+matchesBare :: Text -> StanzaPredicate
 matchesBare bare = attributeMatches "from" ((==bare).getBareJid)
 
 -- |Join groupchat.
-joinGroupchat :: String        -- ^Nickname to use
-              -> String       -- ^JID of room
-              -> Maybe String -- ^Room password
+joinGroupchat :: Text        -- ^Nickname to use
+              -> Text       -- ^JID of room
+              -> Maybe Text -- ^Room password
               -> XMPP ()
 joinGroupchat nick room password = do
     sendStanza $ XML "presence"
-                   [("to",room++"/"++nick)]
+                   [("to",T.concat[room,"/",nick])]
                    [XML "x" [("xmlns","http://jabber.org/protocol/muc")]
                      passNode]
   where
     passNode = maybe [] (\pass -> [XML "password" [] [CData pass]]) password
 
 -- |Leave groupchat.
-leaveGroupchat :: String -> XMPP ()
+leaveGroupchat :: Text -> XMPP ()
 leaveGroupchat room = sendStanza $ XML "presence"
                                      [("to",room),("type","unavailable")] []
 
@@ -32,13 +35,13 @@ isGroupchatMessage :: StanzaPredicate
 isGroupchatMessage = isMessage `conj` attributeMatches "type" (=="groupchat")
 
 -- |Return true if the stanza is a private message in the named room.
-isGroupchatPrivmsg :: String -> StanzaPredicate
+isGroupchatPrivmsg :: Text -> StanzaPredicate
 isGroupchatPrivmsg room = matchesBare room `conj` attributeMatches "type" (=="chat")
                           `conj` attributeMatches "from" ((/="") . getResource)
 
 -- |Send a groupchat message.
-sendGroupchatMessage :: String  -- ^JID of chat room
-                     -> String  -- ^Text of message
+sendGroupchatMessage :: Text  -- ^JID of chat room
+                     -> Text  -- ^Text of message
                      -> XMPP ()
 sendGroupchatMessage room body =
     sendStanza $ XML "message"
@@ -47,23 +50,23 @@ sendGroupchatMessage room body =
                    [XML "body" [] [CData body]]
 
 -- |Send a private message in a chat room.
-sendGroupchatPrivateMessage :: String -- ^Nick of recipient
-                            -> String -- ^JID of chat room
-                            -> String -- ^Text of message
+sendGroupchatPrivateMessage :: Text -- ^Nick of recipient
+                            -> Text -- ^JID of chat room
+                            -> Text -- ^Text of message
                             -> XMPP ()
 sendGroupchatPrivateMessage nick room body =
     sendStanza $ XML "message"
-                   [("to",room++"/"++nick),
+                   [("to",T.concat[room,"/",nick]),
                     ("type","chat")]
                    [XML "body" [] [CData body]]
 
 
-getMessageSubject :: XMLElem -> Maybe String
+getMessageSubject :: XMLElem -> Maybe Text
 getMessageSubject =
     cdata' . xmlPath ["subject"]
 
-setGroupchatSubject :: String -- ^JID of chat room
-                    -> String -- ^Subject
+setGroupchatSubject :: Text -- ^JID of chat room
+                    -> Text -- ^Subject
                     -> XMPP ()
 setGroupchatSubject room subject =
     sendStanza $ XML "message"
@@ -76,8 +79,8 @@ data Occupant
   = Occupant
     { occRole :: Role
     , occAffiliation :: Affiliation
-    , occNick :: String
-    , occJid :: Maybe String
+    , occNick :: Text
+    , occJid :: Maybe Text
     , occStatus :: Status
     }
 
@@ -90,10 +93,10 @@ data Affiliation = AOwner | AAdmin | AMember | ANone | AOutcast
 -- course, but it separated for simplicity sake.
 data GroupchatPresence
     = Leave
-    | Kick (Maybe String) -- ^Kick reason
-    | Ban (Maybe String) -- ^Ban reason
-    | NickChange String -- ^New nick
-    | RoleChange (Maybe String) -- ^Role change (also show/status
+    | Kick (Maybe Text) -- ^Kick reason
+    | Ban (Maybe Text) -- ^Ban reason
+    | NickChange Text -- ^New nick
+    | RoleChange (Maybe Text) -- ^Role change (also show/status
                                 -- change) with reason.
 
 -- |Create groupchat presence from stanza.
@@ -102,7 +105,7 @@ doGroupchatPresence stanza =
     (presence, Occupant role aff nick jid status)
   where
     items = xmlPath' ["x", "item"] [stanza]
-    item | length items == 0 = XML [] [] []
+    item | length items == 0 = XML T.empty [] []
          | otherwise         = head items
     role = case getAttr "role" item of
       Just "moderator"   -> RModerator
@@ -146,13 +149,13 @@ isGroupchatPresence stanza =
             xs
 
 
-type Nick = String
-type JID = String
+type Nick = Text
+type JID = Text
 -- |Do admin actions in groupchat.
 adminGroupchat :: Either Nick JID -- ^Nickname or JID
-               -> String -- ^JID of chat room
-               -> String -- ^Role or affiliation argument
-               -> (Maybe String) -- ^Reason
+               -> Text -- ^JID of chat room
+               -> Text -- ^Role or affiliation argument
+               -> (Maybe Text) -- ^Reason
                -> XMPP ()
 adminGroupchat nickOrJid room arg mReason =
     sendIq room "set"

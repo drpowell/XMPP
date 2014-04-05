@@ -22,6 +22,7 @@ module Network.XMPP.XMLParse
     )
     where
 
+import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Attoparsec.Text
 import Data.Attoparsec.Combinator
@@ -29,17 +30,17 @@ import Control.Applicative ((<|>))
 import Data.List
 
 -- |A data structure representing an XML element.
-data XMLElem = XML String [(String,String)] [XMLElem]
+data XMLElem = XML Text [(Text,Text)] [XMLElem]
              -- ^Tags have a name, a list of attributes, and a list of
              -- child elements.
-             | CData String
+             | CData Text
                -- ^Character data just contains a string.
                deriving (Show, Eq)
 
 -- |Follow a \"path\" of named subtags in an XML tree.  For every
 -- element in the given list, find the subtag with that name and
 -- proceed recursively.
-xmlPath :: [String] -> XMLElem -> Maybe XMLElem
+xmlPath :: [Text] -> XMLElem -> Maybe XMLElem
 xmlPath [] el = return el
 xmlPath (name:names) (XML _ _ els) =
     do
@@ -51,12 +52,12 @@ xmlPath (name:names) (XML _ _ els) =
 xmlPath _ _ = error "Unexpected use of xmlPath"
 
 -- |Get the value of an attribute in the given tag.
-getAttr :: String -> XMLElem -> Maybe String
+getAttr :: Text -> XMLElem -> Maybe Text
 getAttr attr (XML _ attrs _) = lookup attr attrs
 getAttr _ _ = error "Unexpected use of getAttr"
 
 -- |Get the character data subelement of the given tag.
-getCdata :: XMLElem -> Maybe String
+getCdata :: XMLElem -> Maybe Text
 getCdata (XML _ _ els) =
     case els of
       [CData s] -> Just s
@@ -65,18 +66,18 @@ getCdata _ = error "Unexpected use of getCdata"
 
 -- |Convert the tag back to XML.  If the first parameter is true,
 -- close the tag.
-xmlToString :: Bool -> XMLElem -> T.Text
+xmlToString :: Bool -> XMLElem -> Text
 xmlToString _ (CData s) = replaceToEntities s
 xmlToString close (XML name attrs subels) =
-    T.concat $ ["<", T.pack name, attrsToString attrs,">"] ++ sub
+    T.concat $ ["<", name, attrsToString attrs,">"] ++ sub
   where
-    sub | close = [T.concat $ map (xmlToString True) subels, "</", T.pack name, ">"]
+    sub | close = [T.concat $ map (xmlToString True) subels, "</", name, ">"]
         | otherwise = []
 
 -----------------------------------------------
 -- |Replace special characters to XML entities.
-replaceToEntities :: String -> T.Text
-replaceToEntities str = T.concat $ map repl str
+replaceToEntities :: Text -> Text
+replaceToEntities str = T.concatMap repl str
   where
     repl c = case c of
                 '&' -> "&amp;"
@@ -87,10 +88,10 @@ replaceToEntities str = T.concat $ map repl str
                 c -> T.singleton c
 -----------------------------------------------
 
-attrsToString :: [(String,String)] -> T.Text
+attrsToString :: [(Text,Text)] -> Text
 attrsToString [] = ""
 attrsToString ((name,value):attrs) =
-    T.concat [" ", T.pack name, "='", T.pack value, "'", attrsToString attrs]
+    T.concat [" ", name, "='", value, "'", attrsToString attrs]
 
 many = many'
 
@@ -126,7 +127,7 @@ deepTag =
             els <- many $ (try deepTag) <|> cdata
             char '<'
             char '/'
-            string $ T.pack name
+            string name
             char '>'
             return els
       return $ XML name attrs subels
@@ -142,9 +143,9 @@ tagStart =
                  attr <- attribute
                  many space
                  return attr
-      return $ XML name attrs []
+      return $ XML (T.pack name) attrs []
 
-attribute :: Parser (String, String)
+attribute :: Parser (Text, Text)
 attribute =
     do
       name <- many1 tokenChar
@@ -152,7 +153,7 @@ attribute =
       quote <- char '\'' <|> char '"'
       value <- many $ satisfy (/=quote)
       char quote
-      return (name, value)
+      return (T.pack name, T.pack value)
 
 -----------------------------------------------
 -- cdata :: Parser XMLElem
@@ -166,7 +167,7 @@ cdata :: Parser XMLElem
 cdata =
     do
       text <- many1 $ plainCdata <|> predefinedEntity
-      return $ CData text
+      return $ CData $ T.pack text
     where plainCdata = satisfy (\c -> c/='<' && c/='&')
           predefinedEntity = do
             char '&'
@@ -199,7 +200,7 @@ processingInstruction =
       return ()
 
 -----------------------------------------------
-xmlPath' :: [String] -> [XMLElem] -> [XMLElem]
+xmlPath' :: [Text] -> [XMLElem] -> [XMLElem]
 xmlPath' [] [] = []
 xmlPath' [] els = els
 xmlPath' (name:names) elems =
@@ -212,7 +213,6 @@ xmlPath' (name:names) elems =
                    ) els
         filter_elem _ = error "Unexpected use of filter_elem"
     in xmlPath' names (concat elems')
-
 -----------------------------------------------
 -- |Get all childs of the XML element
 allChilds :: XMLElem -> [XMLElem]
