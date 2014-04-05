@@ -48,8 +48,8 @@ openStream server serverName =
                        ("xmlns","jabber:client"),
                        ("xmlns:stream","http://etherx.jabber.org/streams")]
                       []
-      debugM tagXMPPConn $ "Sending : "++s
-      hPutStr h s
+      debugM tagXMPPConn $ "Sending : "++T.unpack s
+      T.hPutStr h s
       buffer <- newIORef T.empty
       readLock <- newMVar ()
       writeLock <- newMVar ()
@@ -67,8 +67,8 @@ openComponent server port compName secret =
                        ("xmlns","jabber:component:accept"),
                        ("xmlns:stream","http://etherx.jabber.org/streams")]
                       []
-      debugM tagXMPPConn $ "Sending : "++s
-      hPutStr h s
+      debugM tagXMPPConn $ "Sending : "++T.unpack s
+      T.hPutStr h s
       buffer <- newIORef T.empty
       readLock <- newMVar ()
       writeLock <- newMVar ()
@@ -121,8 +121,8 @@ instance XMPPConnection TCPConnection where
     sendStanza c x =
         let str = xmlToString True x
         in withLock (writeLock c) $ do
-               debugM tagXMPPConn $ "sent '" ++ str ++ "'"
-               T.hPutStr (handle c) (T.pack str)
+               -- debugM tagXMPPConn $ "sent '" ++ str ++ "'"
+               T.hPutStr (handle c) str
     closeConnection c =
         hClose (handle c)
 

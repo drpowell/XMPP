@@ -65,35 +65,32 @@ getCdata _ = error "Unexpected use of getCdata"
 
 -- |Convert the tag back to XML.  If the first parameter is true,
 -- close the tag.
-xmlToString :: Bool -> XMLElem -> String
+xmlToString :: Bool -> XMLElem -> T.Text
 xmlToString _ (CData s) = replaceToEntities s
 xmlToString close (XML name attrs subels) =
-    "<" ++ name ++ attrsToString attrs ++
-        if close then
-            ">" ++ (concat $ map (xmlToString True) subels)
-                ++ "</" ++ name ++ ">"
-            else
-                ">"
+    T.concat $ ["<", T.pack name, attrsToString attrs,">"] ++ sub
+  where
+    sub | close = [T.concat $ map (xmlToString True) subels, "</", T.pack name, ">"]
+        | otherwise = []
 
 -----------------------------------------------
 -- |Replace special characters to XML entities.
-replaceToEntities :: String -> String
-replaceToEntities [] = []
-replaceToEntities (char:chars) =
-    let str = case char of
+replaceToEntities :: String -> T.Text
+replaceToEntities str = T.concat $ map repl str
+  where
+    repl c = case c of
                 '&' -> "&amp;"
                 '<' -> "&lt;"
                 '>' -> "&gt;"
                 '"' -> "&quot;"
                 '\'' -> "&apos;"
-                _ -> char:[]
-    in str ++ (replaceToEntities chars)
+                c -> T.singleton c
 -----------------------------------------------
 
-attrsToString :: [(String,String)] -> String
+attrsToString :: [(String,String)] -> T.Text
 attrsToString [] = ""
 attrsToString ((name,value):attrs) =
-    " "++name++"='"++value++"'" ++ attrsToString attrs
+    T.concat [" ", T.pack name, "='", T.pack value, "'", attrsToString attrs]
 
 many = many'
 
