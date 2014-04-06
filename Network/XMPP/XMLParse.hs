@@ -25,7 +25,6 @@ import Data.Char (isAlpha)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Attoparsec.Text as P
-import Data.Attoparsec.Combinator
 import Control.Applicative ((<|>))
 import Data.List (find)
 
@@ -93,12 +92,10 @@ attrsToString [] = ""
 attrsToString ((name,value):attrs) =
     T.concat [" ", name, "='", value, "'", attrsToString attrs]
 
-many = many'
-
 xmppStreamStart :: Parser XMLElem
 xmppStreamStart =
     do
-      many processingInstruction
+      many' processingInstruction
       streamTag <- shallowTag
       return streamTag
 
@@ -121,7 +118,7 @@ deepTag =
           <|>
           do
             char '>'
-            els <- many $ deepTag <|> cdata
+            els <- many' $ deepTag <|> cdata
             char '<'
             char '/'
             string name
@@ -135,7 +132,7 @@ tagStart =
       char '<'
       name <- takeWhile1 isTokenChar
       skipSpace
-      attrs <- many $
+      attrs <- many' $
                do
                  attr <- attribute
                  skipSpace
