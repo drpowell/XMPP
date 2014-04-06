@@ -13,21 +13,21 @@ module Network.XMPP.XMLParse
     , xmppStreamStart
     , shallowTag
     , deepTag
-    , deepTags
-    , Data.Attoparsec.Text.parse
-    , Data.Attoparsec.Text.Parser
-    , Data.Attoparsec.Text.IResult(..)
+    , P.parse
+    , P.Parser
+    , P.IResult(..)
     , xmlPath'
     , allChilds
     )
     where
 
+import Data.Char (isAlpha)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Attoparsec.Text
+import Data.Attoparsec.Text as P
 import Data.Attoparsec.Combinator
 import Control.Applicative ((<|>))
-import Data.List
+import Data.List (find)
 
 -- |A data structure representing an XML element.
 data XMLElem = XML Text [(Text,Text)] [XMLElem]
@@ -98,7 +98,7 @@ many = many'
 xmppStreamStart :: Parser XMLElem
 xmppStreamStart =
     do
-      many $ try processingInstruction
+      many processingInstruction
       streamTag <- shallowTag
       return streamTag
 
@@ -109,22 +109,19 @@ shallowTag =
       char '>'
       return tag
 
-deepTags :: Parser [XMLElem]
-deepTags = many $ try deepTag
-
 deepTag :: Parser XMLElem
 deepTag =
     do
       (XML name attrs _) <- tagStart
       subels <-
-          (try $ do
+          (do
              char '/'
              char '>'
              return [])
           <|>
           do
             char '>'
-            els <- many $ (try deepTag) <|> cdata
+            els <- many $ deepTag <|> cdata
             char '<'
             char '/'
             string name
@@ -136,24 +133,24 @@ tagStart :: Parser XMLElem
 tagStart =
     do
       char '<'
-      name <- many1 tokenChar
-      many space
+      name <- takeWhile1 isTokenChar
+      skipSpace
       attrs <- many $
                do
                  attr <- attribute
-                 many space
+                 skipSpace
                  return attr
-      return $ XML (T.pack name) attrs []
+      return $ XML name attrs []
 
 attribute :: Parser (Text, Text)
 attribute =
     do
-      name <- many1 tokenChar
+      name <- takeWhile1 isTokenChar
       char '='
       quote <- char '\'' <|> char '"'
-      value <- many $ satisfy (/=quote)
+      value <- P.takeWhile (/=quote)
       char quote
-      return (T.pack name, T.pack value)
+      return (name, value)
 
 -----------------------------------------------
 -- cdata :: Parser XMLElem
@@ -171,11 +168,11 @@ cdata =
     where plainCdata = satisfy (\c -> c/='<' && c/='&')
           predefinedEntity = do
             char '&'
-            entity <- try (string "amp")
-                      <|> try (string "lt")
-                     <|> try (string "gt")
-                     <|> try (string "quot")
-                     <|> string "apos"
+            entity <- string "amp"
+                  <|> string "lt"
+                  <|> string "gt"
+                  <|> string "quot"
+                  <|> string "apos"
             char ';'
             return $ case entity of
                        "amp" -> '&'
@@ -185,16 +182,15 @@ cdata =
                        "apos" -> '\''
                        x -> error $ "Unknown entity in cdata : "++show x
 -----------------------------------------------
-
-tokenChar :: Parser Char
-tokenChar = letter <|> char ':' <|> char '-' <|> char '_' <|> char '.'
+isTokenChar :: Char -> Bool
+isTokenChar c = isAlpha c || c==':' || c=='-' || c=='_' || c=='.'
 
 processingInstruction :: Parser ()
 processingInstruction =
     do
       char '<'
       char '?'
-      many $ satisfy (/='?')
+      skipWhile (/='?')
       char '?'
       char '>'
       return ()
