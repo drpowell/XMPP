@@ -20,7 +20,7 @@ import Data.IORef
 import Data.Char (ord)
 import qualified Data.ByteString.Lazy as BL
 import Data.Digest.Pure.SHA (sha1, showDigest)
-import Control.Exception (catch)
+import Control.Exception (catch, throwIO, AssertionFailed(..))
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 
@@ -143,9 +143,10 @@ parseBuffered c parser = do
                   else return buf1
         debugM tagXMPPConn $ "got '" ++ T.unpack buf ++ "'"
         case p buf of
-            Fail rest _ctxt msg -> do warningM tagXMPPConn $ "An error?  Hopefully doesn't matter : "++msg
+            Fail rest _ctxt msg -> do warningM tagXMPPConn $ "An error! Throwing exception : "++msg
                                       writeIORef (buffer c) rest
-                                      parseBuffered c parser
+                                      throwIO (AssertionFailed "Protocol error")
+                                      --parseBuffered c parser
 
             Done rest result -> do writeIORef (buffer c) rest
                                    return result
