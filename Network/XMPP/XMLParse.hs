@@ -90,7 +90,7 @@ replaceToEntities str = T.concatMap repl str
 attrsToString :: [(Text,Text)] -> Text
 attrsToString [] = ""
 attrsToString ((name,value):attrs) =
-    T.concat [" ", name, "='", value, "'", attrsToString attrs]
+    T.concat [" ", name, "='", replaceToEntities value, "'", attrsToString attrs]
 
 xmppStreamStart :: Parser XMLElem
 xmppStreamStart =
@@ -145,9 +145,9 @@ attribute =
       name <- takeWhile1 isTokenChar
       char '='
       quote <- char '\'' <|> char '"'
-      value <- P.takeWhile (/=quote)
+      value <- many' $ escapedText [quote]
       char quote
-      return (name, value)
+      return (name, T.concat value)
 
 -----------------------------------------------
 -- cdata :: Parser XMLElem
@@ -158,11 +158,14 @@ attribute =
 --    where plainCdata = satisfy (\c -> c/='<')
 
 cdata :: Parser XMLElem
-cdata =
+cdata = escapedText "<" >>= return . CData
+
+escapedText :: [Char] -> Parser Text
+escapedText stopChars =
     do
       text <- many1 $ plainCdata <|> predefinedEntity
-      return $ CData $ T.pack text
-    where plainCdata = satisfy (\c -> c/='<' && c/='&')
+      return $ T.pack text
+    where plainCdata = satisfy (\c -> c/='&' && c `notElem` stopChars)
           predefinedEntity = do
             char '&'
             entity <- string "amp"
