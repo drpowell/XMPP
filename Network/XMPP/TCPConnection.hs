@@ -107,6 +107,9 @@ connectStream' (host, port) = do
     debugM tagXMPPConn $ "Trying connectTo : "++host -- ++" : "++show port
     s <- connectTo host port
     hSetBuffering s NoBuffering
+    hSetEncoding s utf8
+    enc <- hGetEncoding s
+    debugM tagXMPPConn $ "Connected, encoding : "++show enc
     return s
 
 -- |Get the stream header that the server sent.  This needs to be
@@ -123,7 +126,7 @@ instance XMPPConnection TCPConnection where
     sendStanza c x =
         let str = xmlToString True x
         in withLock (writeLock c) $ do
-               -- debugM tagXMPPConn $ "sent '" ++ str ++ "'"
+               debugM tagXMPPConn $ "sent '" ++ T.unpack str ++ "'"
                T.hPutStr (handle c) str
     closeConnection c =
         hClose (handle c)
